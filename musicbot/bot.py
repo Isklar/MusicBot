@@ -42,6 +42,21 @@ class SkipState(object):
     def add_skipper(self, skipper):
         self.skippers.add(skipper)
         return self.skip_count
+        
+class ClearState(object):
+    def __init__(self):
+        self.clearers = set()
+
+    @property
+    def clear_count(self):
+        return len(self.clearers)
+
+    def reset(self):
+        self.clearers.clear()
+
+    def add_clearer(self, clearer):
+        self.clearers.add(clearer)
+        return self.clear_count
 
 
 class Response(object):
@@ -135,6 +150,7 @@ class MusicBot(discord.Client):
                 .on('finished-playing', self.on_finished_playing)
 
             player.skip_state = SkipState()
+            player.clear_state = ClearState()
             self.players[server.id] = player
 
         return self.players[server.id]
@@ -142,6 +158,7 @@ class MusicBot(discord.Client):
     async def on_play(self, player, entry):
         self.update_now_playing(entry)
         player.skip_state.reset()
+        player.clear_state.reset()
 
         channel = entry.meta.get('channel', None)
         author = entry.meta.get('author', None)
@@ -577,15 +594,44 @@ class MusicBot(discord.Client):
         else:
            raise CommandError('This bot isnt in your channel %s!' % author)
 
-    async def handle_clear(self, player, author):
+    async def handle_clear(self, player, channel, author):
         """
         Usage {command_prefix}clear
         Clears the playlist.
         """
-        if author.id == self.config.owner_id:
-            player.playlist.clear()
-            return
+        voice_client = self.voice_clients[channel.server.id]
+        if discord.utils.get(voice_client.channel.voice_members, id=author.id):
+            if author.id == self.config.owner_id:
+                player.playlist.clear()
+                return Response('your clear request was acknowledged.', reply=True, delete_after=10)
+                
+            voice_channel = player.voice_client.channel
 
+            num_voice = sum(1 for m in voice_channel.voice_members if not (
+                m.deaf or m.self_deaf or m.id == str(self.config.owner_id)))
+
+            num_clears = player.clear_state.add_clearer(author.id)
+
+            clears_remaining = min(self.config.skips_required, round(num_voice * self.config.skip_ratio_required)) - num_clears
+
+            if clears_remaining <= 0:
+                player.playlist.clear()
+                return Response('your clear request was acknowledged.', reply=True, delete_after=10)
+
+            else:
+                # TODO: When a song gets skipped, delete the old x needed to skip messages
+                return Response(
+                    'your clear request was acknowledged.'
+                    '\n**{}** more {} required to vote to clear the playlist.'.format(
+                        clears_remaining,
+                        'person is' if clears_remaining == 1 else 'people are'
+                    ),
+                    reply=True
+                )
+            
+        else:
+           raise CommandError('This bot isnt in your channel %s!' % author)
+           
     async def handle_skip(self, player, channel, author):
         """
         Usage {command_prefix}skip
