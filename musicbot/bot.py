@@ -13,7 +13,7 @@ from discord.voice_client import VoiceClient
 from musicbot.config import Config
 from musicbot.player import MusicPlayer
 from musicbot.playlist import Playlist
-from musicbot.utils import load_file, extract_user_id, write_file
+from musicbot.utils import load_file, extract_user_id, extract_channel_id, write_file
 
 from .downloader import extract_info
 from .exceptions import CommandError
@@ -63,6 +63,8 @@ class MusicBot(discord.Client):
         self.blacklist = set(map(int, load_file(self.config.blacklist_file)))
         self.whitelist = set(map(int, load_file(self.config.whitelist_file)))
         self.backuplist = load_file(self.config.backup_playlist_file)
+        
+        self.channelblacklist = set(map(int, load_file(self.config.channel_blacklist_file)))
 
         self.last_np_msg = None
 
@@ -361,6 +363,37 @@ class MusicBot(discord.Client):
                 write_file('./config/blacklist.txt', self.blacklist)
 
                 return Response('user has been removed from the blacklist', reply=True, delete_after=10)
+                
+    async def handle_channelblacklist(self, message, option, username):
+        """
+        Usage: {command_prefix}blacklist [ + | - | add | remove ] @UserName
+        Adds or removes the user to the blacklist. Blacklisted users are forbidden from
+        using bot commands. Blacklisting a user also removes them from the whitelist.
+        """
+        if message.author.id != self.config.owner_id:
+            return
+
+        channel_id = extract_channel_id(username)
+        if not channel_id:
+            raise CommandError('Invalid channel specified')
+
+        if option not in ['+', '-', 'add', 'remove']:
+            raise CommandError('Invalid option "%s" specified, use +, -, add, or remove' % option)
+
+        if option in ['+', 'add']:
+            self.channelblacklist.add(channel_id)
+            write_file('./config/channelblacklist.txt', self.channelblacklist)
+            return Response('channel has been added to the blacklist', reply=True, delete_after=10)
+
+        else:
+            if channel_id not in self.channelblacklist:
+                return Response('channel is not in the blacklist', reply=True, delete_after=10)
+
+            else:
+                self.channelblacklist.remove(channel_id)
+                write_file('./config/channelblacklist.txt', self.blacklist)
+
+                return Response('Channel has been removed from the blacklist', reply=True, delete_after=10)
 
 
     async def handle_id(self, author):
@@ -728,6 +761,10 @@ class MusicBot(discord.Client):
 
 
         if int(message.author.id) in self.blacklist and message.author.id != self.config.owner_id:
+            print("[Blacklisted] {0.id}/{0.name} ({1})".format(message.author, message_content))
+            return
+            
+        elif int(message.channel.id) in self.channelblacklist:
             print("[Blacklisted] {0.id}/{0.name} ({1})".format(message.author, message_content))
             return
 

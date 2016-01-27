@@ -24,6 +24,8 @@ class Config(object):
         self.blacklist_file = config.get('Files', 'BlacklistFile', fallback='config/blacklist.txt')
         self.whitelist_file = config.get('Files', 'WhitelistFile', fallback='config/whitelist.txt')
         self.backup_playlist_file = config.get('Files', 'BlackupPlaylistFile', fallback='config/backuplist.txt')
+        
+        self.channel_blacklist_file = config.get('Files', 'ChannelBlacklistFile', fallback='config/channelblacklist.txt')
 
         # Validation logic for bot settings.
         if not self.username or not self.password:

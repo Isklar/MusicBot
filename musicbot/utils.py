@@ -2,6 +2,7 @@ import re
 import unicodedata
 
 _USER_ID_MATCH = re.compile(r'<@(\d+)>')
+_CHANNEL_ID_MATCH = re.compile(r'<#(\d+)>')
 
 
 def load_file(filename):
@@ -29,6 +30,11 @@ def write_file(filename, contents):
 
 def extract_user_id(argument):
     match = _USER_ID_MATCH.match(argument)
+    if match:
+        return int(match.group(1))
+        
+def extract_channel_id(argument):
+    match = _CHANNEL_ID_MATCH.match(argument)
     if match:
         return int(match.group(1))
 
