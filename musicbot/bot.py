@@ -261,6 +261,32 @@ class MusicBot(discord.Client):
         helpmsg = "https://github.com/SexualRhinoceros/MusicBot/wiki/Commands-list" # THIS IS TEMPORARY
         # Maybe there's a clever way to do this
         return Response(helpmsg, reply=True, delete_after=60)
+        
+    async def handle_move(self, channel, author):
+        server = channel.server
+
+        player = self.players[server.id]
+
+        if player.is_stopped:
+            channel = None
+            for channel in server.channels:
+                if channel.type == ChannelType.voice:
+                    if discord.utils.get(channel.voice_members, id=author.id):
+                        if self.voice_clients:
+                            voice_client = self.voice_clients[server.id]
+                            await self.move_member(server.me, channel)
+                            voice_client.channel = channel
+                            
+                            #player._kill_current_player()
+                            #self.players = {}
+                            #player = await self.get_player(channel, create=True)
+                            #self.players[server.id] = player
+
+                            return Response("Moved to %s" %channel, reply=True, delete_after=60)
+            if not channel:
+                raise CommandError('You are not in a voice channel!')
+        else:
+            raise CommandError('This bot is busy at the moment!')
 
     async def handle_whitelist(self, message, option, username):
         """
@@ -361,70 +387,77 @@ class MusicBot(discord.Client):
         Usage {command_prefix}play [song link]
         Adds the song to the playlist.
         """
+        player = self.players[channel.server.id]
+        if player.is_stopped:
+            await self.handle_move(channel, author) 
 
-        try:
-            await self.send_typing(channel)
-
-            reply_text = "Enqueued **%s** to be played. Position in queue: %s"
-
-            info = await extract_info(player.playlist.loop, song_url, download=False, process=False)
-
-            if not info:
-                raise CommandError("That video cannot be played.")
-
-            if 'entries' in info:
-                t0 = time.time()
-
-                # My test was 1.2 seconds per song, but we maybe should fudge it a bit, unless we can
-                # monitor it and edit the message with the estimated time, but that's some ADVANCED SHIT
-                # I don't think we can hook into it anyways, so this will have to do.
-                # It would probably be a thread to check a few playlists and get the speed from that
-                # Different playlists might download at different speeds though
-                wait_per_song = 1.2
-
-                num_songs = sum(1 for _ in info['entries'])
-
-                procmesg = await self.send_message(channel,
-                    'Gathering playlist information for {} songs{}'.format(
-                        num_songs,
-                        ', ETA: {:g} seconds'.format(num_songs*wait_per_song) if num_songs >= 10 else '.'))
-
-                # We don't have a pretty way of doing this yet.  We need either a loop
-                # that sends these every 10 seconds or a nice context manager.
+        voice_client = self.voice_clients[channel.server.id]
+        if discord.utils.get(voice_client.channel.voice_members, id=author.id):
+            try:
                 await self.send_typing(channel)
 
-                entry_list, position = await player.playlist.import_from(song_url, channel=channel, author=author)
-                entry = entry_list[0]
+                reply_text = "Enqueued **%s** to be played. Position in queue: %s"
 
-                tnow = time.time()
-                ttime = tnow - t0
-                listlen = len(entry_list)
+                info = await extract_info(player.playlist.loop, song_url, download=False, process=False)
 
-                print("Processed {} songs in {} seconds at {:.2f}s/song, {:+.2g}/song from expected ({}s)".format(
-                    listlen, '{:.2f}'.format(ttime).rstrip('0').rstrip('.'), ttime/listlen,
-                    ttime/listlen - wait_per_song, wait_per_song*num_songs)
-                )
+                if not info:
+                    raise CommandError("That video cannot be played.")
 
-                await self.delete_message(procmesg)
+                if 'entries' in info:
+                    t0 = time.time()
 
-            else:
-                entry, position = await player.playlist.add_entry(song_url, channel=channel, author=author)
+                    # My test was 1.2 seconds per song, but we maybe should fudge it a bit, unless we can
+                    # monitor it and edit the message with the estimated time, but that's some ADVANCED SHIT
+                    # I don't think we can hook into it anyways, so this will have to do.
+                    # It would probably be a thread to check a few playlists and get the speed from that
+                    # Different playlists might download at different speeds though
+                    wait_per_song = 1.2
 
-            time_until = await player.playlist.estimate_time_until(position, player)
+                    num_songs = sum(1 for _ in info['entries'])
 
-            if position == 1 and player.is_stopped:
-                position = 'Up next!'
-                reply_text = reply_text % (entry.title, position)
-            else:
-                reply_text += ' - estimated time until playing: %s'
-                reply_text = reply_text % (entry.title, position, time_until)
-                # TODO: Subtract time the current song has been playing for
+                    procmesg = await self.send_message(channel,
+                        'Gathering playlist information for {} songs{}'.format(
+                            num_songs,
+                            ', ETA: {:g} seconds'.format(num_songs*wait_per_song) if num_songs >= 10 else '.'))
 
-            return Response(reply_text, reply=True, delete_after=15)
+                    # We don't have a pretty way of doing this yet.  We need either a loop
+                    # that sends these every 10 seconds or a nice context manager.
+                    await self.send_typing(channel)
 
-        except Exception as e:
-            traceback.print_exc()
-            raise CommandError('Unable to queue up song at %s to be played.' % song_url)
+                    entry_list, position = await player.playlist.import_from(song_url, channel=channel, author=author)
+                    entry = entry_list[0]
+
+                    tnow = time.time()
+                    ttime = tnow - t0
+                    listlen = len(entry_list)
+
+                    print("Processed {} songs in {} seconds at {:.2f}s/song, {:+.2g}/song from expected ({}s)".format(
+                        listlen, '{:.2f}'.format(ttime).rstrip('0').rstrip('.'), ttime/listlen,
+                        ttime/listlen - wait_per_song, wait_per_song*num_songs)
+                    )
+
+                    await self.delete_message(procmesg)
+
+                else:
+                    entry, position = await player.playlist.add_entry(song_url, channel=channel, author=author)
+
+                time_until = await player.playlist.estimate_time_until(position, player)
+
+                if position == 1 and player.is_stopped:
+                    position = 'Up next!'
+                    reply_text = reply_text % (entry.title, position)
+                else:
+                    reply_text += ' - estimated time until playing: %s'
+                    reply_text = reply_text % (entry.title, position, time_until)
+                    # TODO: Subtract time the current song has been playing for
+
+                return Response(reply_text, reply=True, delete_after=15)
+
+            except Exception as e:
+                traceback.print_exc()
+                raise CommandError('Unable to queue up song at %s to be played.' % song_url)
+        else:
+            raise CommandError('This bot is busy at the moment!')
 
     async def handle_summon(self, channel, author):
         """
