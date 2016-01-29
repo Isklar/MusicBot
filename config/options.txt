@@ -1,11 +1,11 @@
 [Credentials]
 ; The bot needs its own account to run on (not yours)
-Username = my@email.com
-Password = rhino_is_a_numpty
+Username = nope
+Password = nope
 
 [Permissions]
 ; This is your id, not the bot's id.  The bot does not own the bot.  You do.
-OwnerID = 112233445566778899
+OwnerID = 124849074053578755
 
 [Chat]
 ; Change this if you don't want commands to trigger another bot
@@ -24,6 +24,11 @@ WhiteListCheck = no
 SkipsRequired = 7
 SkipRatio = 0.5
 
+; Enables vote based skipping of songs and clearing of the playlist.
+; The owner can still skip.
+SkipEnabled = yes
+ClearEnabled = yes
+
 ; If no, delete videos after they've played, if the video
 ; isn't still in the queue, to avoid redownloading it
 SaveVideos = yes
@@ -35,4 +40,4 @@ NowPlayingMentions = no
 AutoSummon = yes
 
 ; Play random songs when nothing is queued
-UseAutoPlaylist = yes
+UseAutoPlaylist = no

@@ -16,6 +16,10 @@ class Config(object):
         self.white_list_check = config.getboolean('MusicBot', 'WhiteListCheck', fallback=False)
         self.skips_required = config.getint('MusicBot', 'SkipsRequired', fallback=7)
         self.skip_ratio_required = config.getfloat('MusicBot', 'SkipRatio', fallback=0.5)
+        
+        self.skip_enabled = config.getboolean('MusicBot', 'SkipEnabled', fallback=True)
+        self.clear_enabled = config.getboolean('MusicBot', 'ClearEnabled', fallback=True)
+        
         self.save_videos = config.getboolean('MusicBot', 'SaveVideos', fallback=True)
         self.now_playing_mentions = config.getboolean('MusicBot', 'NowPlayingMentions', fallback=True)
         self.auto_summon = config.getboolean('MusicBot', 'AutoSummon', fallback=True)

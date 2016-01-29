@@ -225,6 +225,8 @@ class MusicBot(discord.Client):
         print("Command prefix is %s" % self.config.command_prefix)
         # print("Days active required to use commands is %s" % self.config.days_active) # NYI
         print("Skip threshold at %s votes or %g%%" % (self.config.skips_required, self.config.skip_ratio_required*100))
+        print("Vote based skips are %s" % ['disabled', 'enabled'][self.config.skip_enabled])
+        print("Vote based clears are %s" % ['disabled', 'enabled'][self.config.clear_enabled])
         print("Whitelist check is %s" % ['disabled', 'enabled'][self.config.white_list_check])
         print("Now Playing message @mentions are %s" % ['disabled', 'enabled'][self.config.now_playing_mentions])
         print("Autosummon is %s" % ['disabled', 'enabled'][self.config.auto_summon])
@@ -605,6 +607,10 @@ class MusicBot(discord.Client):
                 player.playlist.clear()
                 return Response('your clear request was acknowledged.', reply=True, delete_after=10)
                 
+            if not self.config.clear_enabled:
+                raise CommandError("Can't clear the playlist! Vote based clearing is disabled.")
+                return
+                
             voice_channel = player.voice_client.channel
 
             num_voice = sum(1 for m in voice_channel.voice_members if not (
@@ -644,6 +650,10 @@ class MusicBot(discord.Client):
 
             if author.id == self.config.owner_id:
                 player.skip()
+                return Response('Skipped the current song.', reply=True, delete_after=10)
+
+            if not self.config.skip_enabled:
+                raise CommandError("Can't skip! Vote based skipping is disabled.")
                 return
 
             voice_channel = player.voice_client.channel
