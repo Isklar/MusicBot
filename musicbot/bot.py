@@ -784,6 +784,34 @@ class MusicBot(discord.Client):
         message = '\n'.join(lines)
         return Response(message, delete_after=30)
 
+    async def handle_restart(self, message, author):
+        """
+        Usage {command_prefix}restart
+        Restarts the bot (or kills it if it's not in a looping start script)
+        """
+        if author.id == self.config.owner_id:
+            responsetext = '{} is now restarting, please wait...'.format(self.user)
+            print("Restarting bot, please wait...")
+            await self.send_message(message.channel, responsetext)
+            try:
+                try:
+                    self.loop.run_until_complete(self.logout())
+                    pending = asyncio.Task.all_tasks()
+                    gathered = asyncio.gather(*pending)
+                    try:
+                        gathered.cancel()
+                        self.loop.run_forever()
+                        gathered.exception()
+                    except:
+                        pass
+                except:
+                    pass
+                finally:
+                    self.loop.close()
+            except:
+                return Response('', delete_after=1)
+        else:
+            raise CommandError('You do not have the ability to do that %s!' % author)
 
     async def handle_clean(self, message, author, amount):
         """
@@ -791,8 +819,6 @@ class MusicBot(discord.Client):
         Removes [amount] messages the bot has posted in chat.
         """
         pass
-
-
 
     async def on_message(self, message):
         if message.author == self.user:
