@@ -923,7 +923,7 @@ class MusicBot(discord.Client):
             await self.send_message(message.channel, '```\n%s\n```' % e.message)
 
         except:
-            await self.send_message(message.channel, '```\n%s\n```' % traceback.format_exc())
+            #await self.send_message(message.channel, '```\n%s\n```' % traceback.format_exc())
             traceback.print_exc()
 
 
