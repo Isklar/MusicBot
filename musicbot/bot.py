@@ -57,7 +57,21 @@ class ClearState(object):
     def add_clearer(self, clearer):
         self.clearers.add(clearer)
         return self.clear_count
+        
+class RestartState(object):
+    def __init__(self):
+        self.restarts = set()
 
+    @property
+    def restart_count(self):
+        return len(self.restarts)
+
+    def reset(self):
+        self.restarts.clear()
+
+    def add_restart(self, restart):
+        self.restarts.add(restart)
+        return self.restart_count
 
 class Response(object):
     def __init__(self, content, reply=False, delete_after=0):
@@ -151,6 +165,7 @@ class MusicBot(discord.Client):
 
             player.skip_state = SkipState()
             player.clear_state = ClearState()
+            player.restart_state = RestartState()
             self.players[server.id] = player
 
         return self.players[server.id]
@@ -159,6 +174,7 @@ class MusicBot(discord.Client):
         self.update_now_playing(entry)
         player.skip_state.reset()
         player.clear_state.reset()
+        player.restart_state.reset()
 
         channel = entry.meta.get('channel', None)
         author = entry.meta.get('author', None)
@@ -789,29 +805,77 @@ class MusicBot(discord.Client):
         Usage {command_prefix}restart
         Restarts the bot (or kills it if it's not in a looping start script)
         """
-        if author.id == self.config.owner_id:
-            responsetext = '{} is now restarting, please wait...'.format(self.user)
-            print("Restarting bot, please wait...")
-            await self.send_message(message.channel, responsetext)
-            try:
+        voice_client = self.voice_clients[message.channel.server.id]
+        player = await self.get_player(message.channel)
+        
+        if discord.utils.get(voice_client.channel.voice_members, id=author.id):
+            if author.id == self.config.owner_id:
+                responsetext = '{} is now restarting, please wait...'.format(self.user)
+                print("Restarting bot, please wait...")
+                await self.send_message(message.channel, responsetext)
                 try:
-                    self.loop.run_until_complete(self.logout())
-                    pending = asyncio.Task.all_tasks()
-                    gathered = asyncio.gather(*pending)
                     try:
-                        gathered.cancel()
-                        self.loop.run_forever()
-                        gathered.exception()
+                        self.loop.run_until_complete(self.logout())
+                        pending = asyncio.Task.all_tasks()
+                        gathered = asyncio.gather(*pending)
+                        try:
+                            gathered.cancel()
+                            self.loop.run_forever()
+                            gathered.exception()
+                        except:
+                            pass
                     except:
                         pass
+                    finally:
+                        self.loop.close()
                 except:
-                    pass
-                finally:
-                    self.loop.close()
-            except:
-                return Response('', delete_after=1)
+                    return Response('', delete_after=1)
+
+                
+            voice_channel = player.voice_client.channel
+
+            num_voice = sum(1 for m in voice_channel.voice_members if not (
+                m.deaf or m.self_deaf or m.id == str(self.config.owner_id)))
+
+            num_restarts = player.restart_state.add_restart(author.id)
+
+            restarts_remaining = min(self.config.skips_required, round(num_voice * self.config.skip_ratio_required)) - num_restarts
+
+            if restarts_remaining <= 0:
+                responsetext = '{} is now restarting, please wait...'.format(self.user)
+                print("Restarting bot, please wait...")
+                await self.send_message(message.channel, responsetext)
+                try:
+                    try:
+                        self.loop.run_until_complete(self.logout())
+                        pending = asyncio.Task.all_tasks()
+                        gathered = asyncio.gather(*pending)
+                        try:
+                            gathered.cancel()
+                            self.loop.run_forever()
+                            gathered.exception()
+                        except:
+                            pass
+                    except:
+                        pass
+                    finally:
+                        self.loop.close()
+                except:
+                    return Response('', delete_after=1)
+
+            else:
+                return Response(
+                    'your restart request was acknowledged.'
+                    '\n**{}** more {} required to vote to restart the bot.'.format(
+                        restarts_remaining,
+                        'person is' if restarts_remaining == 1 else 'people are'
+                    ),
+                    reply=True
+                )
+            
         else:
-            raise CommandError('You do not have the ability to do that %s!' % author)
+           raise CommandError('This bot isnt in your channel %s!' % author)
+
 
     async def handle_clean(self, message, author, amount):
         """
