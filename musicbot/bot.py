@@ -1275,6 +1275,60 @@ class MusicBot(discord.Client):
                 delete_after=30
             )
 
+    async def cmd_move(self, channel, author, voice_channel):
+        """
+        Usage:
+            {command_prefix}move
+
+        Call the bot to the summoner's voice channel if nothing is playing.
+        """
+
+        if not author.voice_channel:
+            raise exceptions.CommandError('You are not in a voice channel!')
+
+        player = await self.get_player(author.voice_channel, create=True)
+
+        if player.is_playing:
+            raise exceptions.CommandError('Cant move when something is playing!')
+            return
+
+        voice_client = self.the_voice_clients.get(channel.server.id, None)
+        if voice_client and voice_client.channel.server == author.voice_channel.server:
+            if not voice_client.channel == author.voice_channel:
+                await self.move_voice_client(author.voice_channel)
+
+                if player.is_paused:
+                    player.playlist.clear()
+                    player.stop()
+
+                return Response(
+                "```Moved to \"%s\".```" % author.voice_channel.name,
+                delete_after=25
+                )
+
+        # move to _verify_vc_perms?
+        chperms = author.voice_channel.permissions_for(author.voice_channel.server.me)
+
+        if not chperms.connect:
+            self.safe_print("Cannot join channel \"%s\", no permission." % author.voice_channel.name)
+            return Response(
+                "```Cannot join channel \"%s\", no permission.```" % author.voice_channel.name,
+                delete_after=25
+            )
+
+        elif not chperms.speak:
+            self.safe_print("Will not join channel \"%s\", no permission to speak." % author.voice_channel.name)
+            return Response(
+                "```Will not join channel \"%s\", no permission to speak.```" % author.voice_channel.name,
+                delete_after=25
+            )
+
+        if player.is_stopped:
+            player.play()
+
+        if self.config.auto_playlist:
+            await self.on_player_finished_playing(player)
+
     async def cmd_summon(self, channel, author, voice_channel):
         """
         Usage:
